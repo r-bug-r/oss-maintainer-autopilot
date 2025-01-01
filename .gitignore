@@ -1,0 +1,37 @@
+# Runtime state
+var/
+*.db
+*.db-wal
+*.db-shm
+backups/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Screenshots and traces captured while verifying the console
+.ui-verify/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local secrets: never commit a real environment file
+.env
+.env.*
+!.env.example
