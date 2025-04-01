@@ -96,3 +96,42 @@ delivers a signed `issues.opened` fixture, approves the generated question-only
 proposal, executes it, and asserts that exactly one comment and one model call
 exist and that the audit chain verifies.
 
+## Landing page
+
+The static landing page lives in `site/`. It has no build step and no JavaScript;
+the remote webfonts fall back to system stacks offline. Preview it locally with:
+
+```bash
+python -m http.server --directory site 8080
+```
+
+The `pages` workflow publishes `site/` on pushes to `main`. Set the repository's
+Pages source to **GitHub Actions** once under Settings → Pages.
+
+## Design invariants
+
+- **No unapproved side effects.** A forge call can only happen from a proposal in
+  `approved` state, claimed by a conditional `UPDATE` so a repeated click cannot
+  post twice.
+- **Untrusted content stays untrusted.** Issue text is framed as data in the
+  prompt, never as instructions; model output is validated against a closed
+  schema that rejects unknown fields and actions.
+- **Budget before spend.** The gateway checks per-repository daily/monthly limits
+  before calling a provider, and records a ledger row for failures and cache hits
+  too.
+- **Fail closed.** A missing webhook secret, invalid signature, live provider
+  without explicit opt-in, or unsupported provider raises instead of degrading.
+- **Content is not history.** Deleting a repository's data removes content and
+  anonymizes cost rows; the audit chain keeps identifiers and hashes only.
+
+See `docs/architecture.md`, `docs/threat-model.md`, `docs/privacy.md`,
+`docs/operations.md`, and `docs/self-hosting.md`.
+
+## Status
+
+Phase A (implementation) is complete for the local, zero-cost path. Phase B
+(visual UI design) has not started. Real GitHub App installation, a pilot
+repository, and any live model call remain gated on explicit operator consent
+and are documented in `docs/decisions/`.
+
+License: Apache-2.0.
