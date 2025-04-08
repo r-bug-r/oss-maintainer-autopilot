@@ -93,3 +93,42 @@ precondition, so two concurrent approvals or a double-clicked execute cannot bot
 win. There is no automatic retry: a failure returns the proposal to
 `action_failed` and the operator decides.
 
+## Persistence
+
+SQLite with `PRAGMA foreign_keys = ON` and WAL. Tables: `repositories`,
+`repository_settings`, `actors`, `repository_actors`, `webhook_deliveries`,
+`issues`, `pull_requests`, `comments`, `proposals`, `model_calls`,
+`model_cache`, `audit_events`, `schema_migrations`.
+
+`audit_events` has `BEFORE UPDATE` and `BEFORE DELETE` triggers that abort. Each
+row stores `prev_hash` and `hash` over the canonical JSON of the row, so
+`autopilot audit verify` recomputes the chain and reports the first broken row.
+Deleting a repository's content removes issue, comment, and proposal rows,
+anonymizes cost rows, deletes the repository row, and appends one
+`repository.deleted` event with counts only.
+
+## Cost control
+
+`ModelGateway` is the only path to a provider. Before each call it computes the
+budget state from `model_calls` since the start of the day and month, compares it
+to the per-repository limits, and raises `BudgetExceeded` without calling the
+provider. Responses are cached by prompt version, input hash, model, and
+temperature. The ledger records tokens, latency, and estimated cost per call, so
+`/api/metrics` and the CLI can attribute spend to a repository and workflow.
+
+## Trust boundaries
+
+| Boundary | Control |
+| --- | --- |
+| Internet → webhook route | HMAC signature, size cap, event allowlist, replay dedupe |
+| Issue content → prompt | Framed as data inside `CONTEXT_JSON`; injection signals logged |
+| Model → business logic | Closed schema, enum checks, cross-reference checks, no action field |
+| HTTP client → API | Loopback trust, or admin token + actor header for remote |
+| Actor → approval | Repository role (`owner`, `maintainer`, `approver`) checked in SQL |
+| Process → forge | Only `approved`/`action_failed` proposals, claimed once |
+
+## Deployment
+
+One process, one SQLite file, one webhook secret. The receiver can run behind a
+tunnel or reverse proxy; see `docs/self-hosting.md`. There is no queue, no
+worker, and no external database in 0.1.
