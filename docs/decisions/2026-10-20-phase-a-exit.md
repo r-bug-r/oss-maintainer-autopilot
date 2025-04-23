@@ -113,3 +113,10 @@ still verified, which is the privacy invariant the plan requires.
 - **No backdated or synthetic Git history.** The repository is initialized with
   the actual date; no commit claims work that did not happen.
 
+## Evidence needed for the next gate
+
+Phase B exit will need: screenshots at 320/390/768/1024/1440, an axe run with
+zero serious/critical findings, a keyboard-only pass, a scroll-width check, and a
+recorded decision entry. The pilot gate additionally needs a written consent
+record, an installation token, and a baseline measurement method before any
+before/after metric is published.
