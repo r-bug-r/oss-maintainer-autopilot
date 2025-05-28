@@ -115,3 +115,18 @@ the audit chain. Treat them as private data with the same retention window.
 Migrations are forward-only and recorded in `schema_migrations`. Never edit an
 applied migration; add the next numbered one.
 
+## Logs
+
+Logs go to stderr as one line per record:
+`<ISO-8601 UTC> <LEVEL> <logger> <message>`. The fully formatted line is passed
+through the redactor before it is written, which also covers exception text and
+interpolated arguments. There is no log file management; use the process
+supervisor's rotation.
+
+## Metrics
+
+`GET /api/metrics` reports per-repository request counts, spend, cache hits, and
+proposal counts by state, derived from `model_calls` and `proposals`. There is no
+separate metrics daemon and no OpenTelemetry exporter in this version; the plan
+requires only that cost be attributable to repository and workflow, which the
+`model_calls` ledger provides.
