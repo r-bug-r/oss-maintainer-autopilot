@@ -83,3 +83,12 @@ login because they are the record of who approved what; if that identifier must
 be removed, the correct action is to destroy and recreate the database, which
 also destroys the audit chain — record that decision in `docs/decisions/`.
 
+## Children
+
+The service is a maintainer tool. It does not target or knowingly collect data
+from children.
+
+## Changes
+
+Material changes to this policy get a dated entry in `docs/decisions/` and a
+changelog entry.
