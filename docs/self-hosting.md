@@ -122,3 +122,35 @@ WantedBy=multi-user.target
 `EnvironmentFile` holds the webhook secret, the optional GitHub token, and any
 provider settings. Keep it mode `0600` and owned by the service user.
 
+## Docker
+
+There is no published image. If you build one, keep the same rules:
+
+- run as a non-root user;
+- mount `/srv/autopilot/var` as a volume;
+- pass secrets as environment variables or a secret file, never in the image;
+- expose only the HTTP port, and only to the proxy network.
+
+## Backup and restore
+
+See `docs/operations.md`. In short: use `sqlite3.Connection.backup`, keep backups
+under the same retention window, and verify the audit chain after restoring.
+
+## Data location
+
+Everything is in one SQLite file plus its `-wal`/`-shm` companions. Deleting the
+directory removes all content and the audit chain. To remove one repository's
+data while keeping the chain, use `autopilot repo delete <id> --confirm` or
+`DELETE /api/repositories/<id>` with `{"confirm": true}` as an owner.
+
+## Cost
+
+The default configuration costs nothing: the fake provider and fixture adapter
+make no network calls. A live OpenAI-compatible provider requires all of:
+
+- `AUTOPILOT_PROVIDER=openai_compatible`
+- `AUTOPILOT_ALLOW_LIVE_PROVIDER=1`
+- `AUTOPILOT_OPENAI_BASE_URL` and `AUTOPILOT_OPENAI_API_KEY`
+- positive `AUTOPILOT_DAILY_COST_LIMIT_USD` and `AUTOPILOT_MONTHLY_COST_LIMIT_USD`
+
+Leaving any of them unset fails startup instead of silently calling a paid API.
