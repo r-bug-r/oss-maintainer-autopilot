@@ -103,3 +103,54 @@ monthly cap; the gateway checks the budget before every call; responses are
 cached; the ledger attributes cost per repository and workflow; no automatic
 retry exists.
 
+### Model output smuggling an action
+
+*Threat:* output contains an extra field such as `"action": "merge"` or a label
+outside the taxonomy.
+
+*Controls:* `schemas.py` is a closed validator: unknown keys are rejected, labels
+must be members of the repository taxonomy, confidence must be in `[0, 1]`, and
+citations must reference supplied source numbers. Invalid output raises
+`SchemaInvalid` and creates no proposal.
+
+### Repository content retention beyond policy
+
+*Threat:* deleted or expired repository content remains in the database.
+
+*Controls:* `autopilot purge` deletes expired proposals, old model calls, old
+delivery rows, and cache entries past retention, and appends a `retention.purged`
+audit event. `delete_repository_data` removes issues, comments, proposals,
+settings, actors, and deliveries, anonymizes cost rows, and appends
+`repository.deleted`. Audit rows retain identifiers and hashes only.
+
+*Residual risk:* the append-only chain cannot be edited, so a hash of prior
+content remains. Hashes are not reversible for issue text in practice, but treat
+them as durable metadata.
+
+### Tampering with the audit log
+
+*Threat:* someone edits or deletes audit rows to hide an action.
+
+*Controls:* `BEFORE UPDATE` and `BEFORE DELETE` triggers abort; each row chains
+`prev_hash` into its own hash; `autopilot audit verify` recomputes the chain.
+
+*Residual risk:* an attacker with database file access can delete the newest
+rows or restore an older file. Export or mirror the chain if you need evidence
+against the host owner.
+
+### Malicious or compromised model provider
+
+*Threat:* a provider returns harmful content, or collects repository data
+unexpectedly.
+
+*Controls:* the provider is opt-in and configurable by base URL, so a local
+Ollama-compatible endpoint can be used; prompts are built from redacted,
+normalized context; output is validated; nothing is executed without approval.
+Data sent to a hosted provider is governed by `docs/privacy.md`.
+
+## Out of scope for 0.1
+
+- Multi-tenant isolation: one process serves one operator's repositories.
+- GitLab: a declared boundary that raises rather than degrading.
+- Supply-chain attacks on the Python interpreter or the host.
+- Denial of service beyond body-size limits; there is no rate limiter in 0.1.
