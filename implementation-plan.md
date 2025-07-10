@@ -222,3 +222,93 @@ The following is the default path for the first 90 days. It assumes the develope
 
 The only model-dependent test in CI should be an explicit, opt-in live smoke test. All normal CI, screenshots, benchmarks, and regression tests must run with fakes or local models.
 
+### 2.12 Free-tier and billing guardrails
+
+Free tiers are service policies, not permanent guarantees. Treat the linked provider documentation as the source of truth at implementation time. The plan must remain executable when every hosted service is unavailable.
+
+**GitHub:** Use a public repository for source, issues, Actions, and Pages. GitHub documentation states that public-repository Actions usage is free and that Pages is available on GitHub Free for public repositories. Do not enable paid runners, private-repository overages, marketplace actions with charges, or a paid organization plan.
+
+**Cloudflare:** Optional only for a stateless public demo or webhook relay. The Workers documentation currently describes a Free plan with a daily request limit. Do not put personal documents, provider keys, or persistent production data there. Set a local-only default and remove the integration if a payment method or billing upgrade is required.
+
+**Supabase/Neon:** Optional only for a disposable, non-sensitive pilot after local SQLite works. Never make the product depend on a hosted database for development. Do not upload repository content, household documents, API keys, or private traces to a free hosted database without explicit consent and a documented retention policy. Stop using the service before its free quota or inactivity policy creates operational risk.
+
+**Model providers:** No provider API is required for development. Do not spend personal funds to create benchmark data. Use fake responses and local inference. Apply for credits only after the product has a bounded workload, a cost ledger, a hard cap, and a public artifact the credits will produce.
+
+**No-billing rule:** If a provider asks for a card, enables automatic overage, requires a paid plan, or cannot expose a hard usage cap, it is not part of the $0 path. Every optional integration must have an environment flag, a local fallback, and a removal test.
+
+### 2.13 Concrete local development workflow
+
+1. Install Python 3.12, Git, a code editor, and optionally Ollama. Verify versions and record them in `docs/development.md`.
+2. Create a public repository with the actual current date, an OSI-approved license, `pyproject.toml`, lockfile, and `Makefile` or equivalent task runner.
+3. Implement domain rules and a fake provider before credentials, webhooks, or hosted services.
+4. Keep all fixtures synthetic. Put secrets only in local environment variables; add a secret-scanning pre-commit check.
+5. Run `format`, `lint`, `typecheck`, `unit`, `integration`, `security`, and `smoke` tasks locally before pushing.
+6. Push to a public repository and let free public CI repeat the same commands.
+7. Use GitHub Pages only for static documentation and fixture demos; never expose a secret through a static build.
+8. Run the UI through a local dev server and Playwright at 320, 390, 768, 1024, and 1440 CSS pixels.
+9. Record model-free benchmark results, screenshots, accessibility output, and API-cost ledger entries in the release evidence.
+10. Add a real provider only after the fake-provider path is stable, with a daily cap of zero by default and an explicit opt-in for a bounded smoke run.
+
+### 2.14 Required project gates before any paid usage
+
+No project may request or consume funded API credits until all gates pass:
+
+- The core user workflow works with a fake provider.
+- A local-model path has been attempted or the reason it is infeasible is documented.
+- A request budget, token budget, timeout, retry policy, and monthly hard cap are implemented.
+- The cost ledger records provider, model, request ID, input/output tokens, outcome, and estimated cost.
+- Sensitive input is redacted before logs and optional persistence.
+- The provider can be disabled without breaking the deterministic workflow.
+- A benchmark fixture set and regression threshold exist.
+- A human approval gate exists for externally visible or destructive actions.
+- The funding application names the exact public artifact produced by the requested usage.
+
+### 2.15 Legal, data, and operational gates
+
+Before public pilots:
+
+- Choose and publish an OSI-approved license compatible with every dependency.
+- Generate a dependency inventory and review licenses for model runtimes, OCR, icons, fonts, and SDKs.
+- Publish `SECURITY.md`, a privacy notice, retention defaults, deletion behavior, and a contact method.
+- Do not process private repository content, household documents, or personal data without explicit permission and a documented purpose.
+- Keep pilot data separate from public fixtures. Use synthetic or redacted examples for demos.
+- Obtain consent before publishing screenshots, repository names, quotes, metrics, or case studies.
+- Document whether model providers retain inputs, whether training is enabled, and how users can disable provider calls.
+- Define incident response: revoke credentials, stop processing, preserve minimal evidence, notify affected users, and document remediation.
+- Define backup behavior and deletion verification for every persisted data class.
+- Add rate limits, payload-size limits, timeout limits, and abuse reporting before accepting public traffic.
+
+### 2.16 Feasibility decision
+
+The five projects are not equal in execution risk. The plan is feasible only if work remains sequential:
+
+- **Build now:** OSS Maintainer Autopilot with fake-provider support and Trace-to-Eval fixtures.
+- **Build after the first pilot:** Trace-to-Eval as a standalone CLI.
+- **Do not start until a security reviewer is available:** Open Agent Firewall.
+- **Do not start until a real routing/budget use case exists:** AI Gateway Cost Firewall.
+- **Prototype only after the developer can support local document security:** Open Home File.
+
+The exit decision for each project is evidence-based: stop, continue, or narrow scope after the stated pilot metrics. A project does not advance because its implementation is interesting or because an API grant is available.
+### 2.17 $0 source register
+
+Re-check these official pages immediately before enabling an optional service. The plan relies on the documented public-repository and free-plan behavior, not on a permanent promise from any provider:
+
+- GitHub Actions billing: https://docs.github.com/en/billing/concepts/product-billing/github-actions
+- GitHub Pages: https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages
+- Cloudflare Workers limits: https://developers.cloudflare.com/workers/platform/limits/
+- Supabase pricing: https://supabase.com/pricing
+- Ollama local execution: https://docs.ollama.com/local
+- Playwright accessibility testing: https://playwright.dev/docs/accessibility-testing
+- Penpot open-source design tool: https://penpot.app/design/design-tool
+
+If an official page changes a limit, requires billing, or removes a needed feature, use the local fallback and update `docs/development.md`; do not silently add a paid dependency.
+
+---
+
+
+---
+
+---
+
+---
+
