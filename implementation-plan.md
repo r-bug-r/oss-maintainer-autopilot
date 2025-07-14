@@ -312,3 +312,197 @@ If an official page changes a limit, requires billing, or removes a needed featu
 
 ---
 
+# 3. Project Plan: OSS Maintainer Autopilot
+
+**Zero-cost development mode:** Run the webhook receiver locally with signed fixture events, SQLite, the fake provider, and a disposable local Git repository. Use GitHub public-repository Actions only for repeatable CI. Do not create a GitHub App installation or call a model provider until the local approval and audit smoke test passes.
+
+
+## Goal and wedge
+
+Build an open-source GitHub/GitLab app that helps maintainers summarize, classify, and prepare repository work while requiring human approval before comments, labels, closures, merges, or releases.
+
+**One-line promise:** Reduce repetitive maintainer work without giving an agent unchecked repository authority.
+
+**Primary audience:** Maintainers of active projects with more issues and pull requests than they can process consistently.
+
+**Why this is first:** The distribution path is direct, the benefit is easy to demonstrate publicly, and each pilot can create measurable evidence for later funding applications.
+
+## MVP requirements
+
+1. Receive issue and pull-request events through a secure webhook.
+2. Verify signatures and reject replayed or malformed events.
+3. Fetch only the repository data required for the requested workflow.
+4. Produce structured summaries, labels, duplicate candidates, missing-reproduction questions, and PR review notes.
+5. Present proposed actions in a dashboard or pull-request comment draft.
+6. Require an authorized human approval for external side effects.
+7. Record input hashes, model metadata, proposals, approvals, and final outcomes.
+8. Support GitHub first; keep an adapter boundary for GitLab.
+9. Offer local execution or self-hosting with documented secrets.
+10. Allow repository owners to disable workflows and delete stored data.
+
+Out of scope for MVP: autonomous merge, automatic issue closure, unrestricted shell access, training on customer content, and a general-purpose chat interface.
+
+## Architecture and data flow
+
+```text
+GitHub webhook
+    -> signature verifier and event deduplicator
+    -> workflow dispatcher
+    -> repository fetch adapter
+    -> redaction and context builder
+    -> model adapter
+    -> schema validator and confidence/risk classifier
+    -> proposal store
+    -> maintainer approval UI/API
+    -> GitHub action adapter
+    -> immutable audit event
+```
+
+Components:
+
+- Webhook service: receives events, validates signatures, enforces idempotency.
+- Provider adapter: Claude, OpenAI-compatible, and fake test provider.
+- Workflow engine: explicit workflows, not arbitrary model-generated code.
+- Proposal store: SQLite initially; PostgreSQL for hosted multi-tenant deployment.
+- Approval service: role-based authorization, expiry, and conflict checks.
+- Connector: least-privilege GitHub App permissions.
+- CLI: local replay of an event against a fixture or live repository with consent.
+
+## Implementation sequence
+
+1. Create a GitHub App with minimum read permissions and a local webhook receiver. Verify with signed fixture events and a replay rejection test.
+2. Implement normalized repository, issue, comment, and pull-request schemas. Verify the same fixture produces identical normalized input.
+3. Implement the model adapter and structured output schemas. Verify malformed output is rejected without side effects.
+4. Build issue summarization and missing-reproduction-question workflows. Verify outputs against labeled fixtures.
+5. Add duplicate-candidate retrieval using deterministic similarity first; use the model only to explain candidate matches.
+6. Add proposal storage, approval expiry, actor authorization, and audit events. Verify an unapproved proposal cannot modify a repository.
+7. Add PR summary and release-note drafting. Verify permissions and source citations.
+8. Add a minimal dashboard or CLI review command. Verify a maintainer can inspect, approve, reject, and retry a proposal.
+9. Deploy to one consenting pilot repository with retention disabled or minimized. Record baseline metrics before enabling automation.
+10. Publish a self-hosting guide, threat model, architecture diagram, and an anonymized pilot report.
+
+## Verification strategy
+
+Permanent tests must cover:
+
+- Invalid webhook signatures and duplicate delivery IDs.
+- Secret-bearing issue text being redacted from logs.
+- Prompt injection in issue content not changing allowed actions.
+- Approval by an unauthorized user being rejected.
+- Approval after proposal expiry being rejected.
+- A provider timeout leaving a retryable state without duplicate comments.
+- A GitHub API failure producing a recoverable proposal state.
+- Correct attribution of model cost to repository and workflow.
+- Repository deletion removing stored content according to policy.
+
+Smoke scenario: install the app on a disposable repository, open an issue with missing reproduction details, receive a proposed question, approve it, confirm exactly one comment is posted, and inspect the audit record.
+
+## Rollout and traction
+
+- Pilot 1: personal or disposable repository with synthetic data.
+- Pilot 2: one trusted maintainer who grants written permission.
+- Pilot 3: a project with enough issue volume to measure time saved.
+- Publish before/after metrics only when the baseline and measurement method are documented.
+- Create short screen recordings showing proposal, approval, and audit trail.
+- Distribute through GitHub Marketplace, maintainer communities, README examples, and direct outreach to projects with public issue backlogs.
+
+Success metrics after 90 days:
+
+- Three active repositories.
+- At least 100 processed events with a recorded outcome.
+- At least 20 external users or contributors across the pilot repositories.
+- Median proposal review time below five minutes.
+- Less than 1% duplicate side-effect rate in audited workflows.
+- Public case study with API cost per successful workflow.
+
+## Risks and mitigations
+
+- **Wrong or embarrassing public comment:** Approval gate, draft-only default, confidence display, undo guidance.
+- **Prompt injection:** Treat all repository text as untrusted; action capabilities are fixed outside the model.
+- **GitHub token compromise:** GitHub App installation tokens, least privilege, rotation, no user PAT storage.
+- **API costs grow with issue volume:** Per-repository budgets, cheap triage model, caching, batch jobs.
+- **Crowded market:** Focus on self-hosting, approval/audit, and maintainer privacy rather than generic “AI issue bot.”
+- **Insufficient program eligibility:** Build real adoption and report current metrics; never present projections as achieved thresholds.
+
+## Open questions to resolve during implementation
+
+- GitHub App only or GitHub App plus CLI in the first release?
+- Which issue-label taxonomy is configurable without becoming a complex rules engine?
+- How long should proposals remain available by default?
+- Which anonymized metrics can pilot maintainers approve for publication?
+
+---
+
+---
+
+# Progress checklist
+
+Updated 2026-10-20. Each line states what was built and how it was verified.
+
+## Shared development guide
+
+| Item | State | Evidence |
+| --- | --- | --- |
+| 2.1 Repository layout | done | `README.md`, `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md`, `GOVERNANCE.md`, `docs/`, `src/`, `tests/{unit,integration,fixtures}`, `examples/`, `scripts/`, `.github/workflows/{ci,security,release}.yml` |
+| 2.2 Development loop | done | `Makefile` targets mirror CI; `docs/development.md` records tool versions |
+| 2.3 Model integration contract | done | `providers.py` (fake + OpenAI-compatible), `schemas.py` closed validators, `gateway.py` budget/cache/ledger |
+| 2.4 Security baseline | done | HMAC webhook verification, payload ceiling, redaction, role checks, append-only audit, `scripts/scan_secrets.py`, `security.yml` |
+| 2.5 Testing ladder | done | unit (canonical, config/schema, duplicates/prompts, providers, redaction, roles, schemas, webhooks), integration (API flow, failures, privacy, real socket), smoke script |
+| 2.6 API-cost controls | done | per-repository request/day/month caps, pre-call check, cache, call ledger, `metrics` CLI and `/api/metrics` |
+| 2.7 Release and provenance | done | `release.yml` builds on tags and attaches artifacts with generated notes; Apache-2.0 |
+| 2.8 Community and governance | done | `GOVERNANCE.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` |
+| 2.9 Funding evidence packet | deferred | requires real adoption; nothing is claimed |
+| 2.10 Momus gap assessment | done | gaps closed as code: TTL bounds, retention bounds, body ceiling, explicit opt-in, deletion path |
+| 2.11 Default $0 stack | done | standard library only; fake provider; fixture adapter; SQLite |
+| 2.12 Free-tier guardrails | done | live provider refuses to start without caps and opt-in |
+| 2.13 Local workflow | done | `docs/development.md` + `README.md` quick start |
+| 2.14 Paid-usage gates | done (code side) | fake path works, budgets/timeouts/caps, ledger, redaction, provider disable, approval gate |
+| 2.15 Legal/operational gates | done | license, dependency inventory, `SECURITY.md`, `docs/privacy.md`, retention/deletion, incident guidance in `docs/operations.md` |
+| 2.16 Feasibility decision | done | `docs/decisions/2026-10-20-target-resolution-and-phase-a.md` |
+| 2.17 $0 source register | done | `docs/development.md` zero-cost register section |
+
+## MVP requirements
+
+| # | Requirement | State | Where |
+| --- | --- | --- | --- |
+| 1 | Receive issue and PR events through a secure webhook | done | `webhooks.py`, `POST /webhooks/github` |
+| 2 | Verify signatures, reject replays and malformed events | done | `verify_signature`, `record_delivery`, `parse_delivery` |
+| 3 | Fetch only the data a workflow needs | done | `adapters.py`, workflow context builders |
+| 4 | Structured summaries, labels, duplicates, reproduction questions, PR notes | done | `workflows.py`, `schemas.py`, `duplicates.py` |
+| 5 | Present proposed actions for review | done | `/api/proposals`, dashboard queue and detail |
+| 6 | Require authorized human approval for side effects | done | `approve`/`execute` state machine, `store.authorize` |
+| 7 | Record input hashes, model metadata, proposals, approvals, outcomes | done | `proposals`, `model_calls`, `audit_events` |
+| 8 | GitHub first with a GitLab adapter boundary | done | `GitHubAdapter`, `GitLabAdapter` declared |
+| 9 | Local execution or self-hosting with documented secrets | done | `docs/self-hosting.md`, `docs/operations.md` |
+| 10 | Owners can disable workflows and delete stored data | done | `repo enable --disable`, `repo delete`, `DELETE /api/repositories/{id}` |
+
+## Implementation sequence
+
+1. Webhook receiver with signed fixtures and replay rejection — done; smoke covers it.
+2. Normalized schemas with deterministic normalization — done; canonical hashing tests.
+3. Model adapter and structured output schemas — done; malformed output rejected without side effects.
+4. Issue summarization and missing-reproduction workflow — done; fake-provider contract tests.
+5. Duplicate candidates with deterministic similarity — done; model only explains matches.
+6. Proposal storage, expiry, authorization, audit — done; integration tests cover illegal transitions.
+7. PR summary and release-note drafting — done; citations recorded.
+8. Minimal review interface — done; CLI plus HTTP dashboard harness.
+9. Deploy to a consenting pilot repository — **deferred**: needs a GitHub account, App installation, and written consent. No credential is fabricated.
+10. Publish self-hosting guide, threat model, architecture, pilot report — docs done; pilot report deferred with item 9.
+
+## Verification strategy
+
+| Required test | State | Test |
+| --- | --- | --- |
+| Invalid webhook signatures | done | `test_webhook_rejects_bad_signature`, `test_signature_rejects_tampered_body` |
+| Duplicate delivery IDs | done | `test_webhook_creates_proposal_and_deduplicates` |
+| Secret-bearing issue text redacted from logs | done | `test_log_lines_are_redacted`, `test_privacy.py` |
+| Prompt injection cannot change allowed actions | done | `test_prompt_context_is_delimited_so_text_cannot_escape_it`, `test_injection_signals_flag_instruction_override_attempts`, closed action set in `schemas.py` |
+| Unauthorized approval rejected | done | `test_approval_requires_a_role` |
+| Approval after expiry rejected | done | `test_expired_proposal_cannot_be_approved` |
+| Provider timeout leaves a retryable state without duplicate comments | done | `test_provider_timeout_leaves_no_proposal`, `test_double_execute_conflicts` |
+| Forge failure produces a recoverable state | done | `test_forge_failure_produces_recoverable_state` |
+| Cost attributed to repository and workflow | done | `test_cost_is_attributed_to_repository_and_workflow` |
+| Repository deletion removes content per policy | done | `test_deletion_removes_content_and_keeps_audit_shape`, `test_repository_delete_*` |
+
+Smoke scenario: run and observed via `python scripts/smoke.py`; see the Phase A
+exit decision record for the exact output.
