@@ -137,3 +137,89 @@ Before a UI release:
 
 # 2. UI/UX Plan: OSS Maintainer Autopilot
 
+## User task
+
+A maintainer needs to inspect a machine-generated proposal, understand its evidence and risk, approve or reject it, and know exactly what happened afterward.
+
+**Primary task flow:** connect repository -> receive event -> inspect proposal -> check source evidence -> approve/reject -> confirm side effect -> inspect audit record.
+
+## Information architecture
+
+- **Overview:** repository health, pending proposals, recent outcomes, current provider mode, data-retention status.
+- **Proposals:** queue filtered by repository, type, risk, age, and status.
+- **Proposal detail:** source issue/PR, generated summary, evidence, model metadata, proposed side effect, approval controls.
+- **Audit:** chronological events, actor, request hash, provider, outcome, and links.
+- **Settings:** workflows, permissions, retention, provider, budgets, webhooks, deletion.
+- **Help:** threat model, self-hosting, permissions, and support.
+
+## Visual direction
+
+Use a pale document-canvas with dark ink and restrained red accent. The memorable anchor is a vertical **decision rail** connecting `received -> analyzed -> proposed -> approved/rejected -> applied`. The rail must remain readable in the narrow layout as a horizontal progress strip.
+
+## Screens and acceptance criteria
+
+### A. Repository overview
+
+Content:
+
+- Repository selector and connection status.
+- Pending proposal count with text status.
+- Review-time trend only when real data exists; otherwise show “No measurements yet.”
+- Recent activity table.
+- Primary action: “Review proposals.”
+
+States:
+
+- First-run connection empty state with permission explanation.
+- Loading skeleton matching table rows.
+- Partial data banner when provider or GitHub data is stale.
+- Error state with retry and diagnostic ID.
+- Permission state for a user without maintainer access.
+
+Acceptance:
+
+- A maintainer reaches the pending queue in one primary click.
+- No invented metrics appear when there is no data.
+- Repository and provider identity are visible before any action.
+
+### B. Proposal queue
+
+Use a dense list/table with columns: type, repository, source, risk, status, created, next action. Filters are URL-addressable. Each row has one primary action and a clear keyboard target.
+
+States:
+
+- Empty: “No proposals need review.” Include a link to workflow settings.
+- Search/filter no-result: preserve filters and offer clear filters.
+- Loading and retrying.
+- Stale proposal: visibly expired and non-actionable.
+- Bulk selection is out of MVP; do not add it for visual density.
+
+Acceptance:
+
+- Keyboard users can filter, open a proposal, and return without losing filter state.
+- Risk is conveyed by text/icon and not color alone.
+
+### C. Proposal detail
+
+Layout in task order:
+
+1. Header: proposal type, repository, status, source link.
+2. Summary and structured fields.
+3. Evidence rail: source excerpts with line/comment citations.
+4. Proposed action preview in an explicit “will change” block.
+5. Risk and model metadata in a collapsible details section.
+6. Sticky or bottom action bar: Approve, Reject, Edit draft, Return to queue.
+
+Approval dialog:
+
+- Shows exact side effect, target, actor, and expiry.
+- Requires an explicit confirmation for public comments or labels.
+- Disables the action during submission.
+- Announces success/error without moving focus unexpectedly.
+
+Acceptance:
+
+- The user can identify what the model proposed, why, and what will change without leaving the screen.
+- Unapproved proposals cannot expose an enabled destructive action.
+- After approval, the detail shows the final GitHub result and audit link.
+
