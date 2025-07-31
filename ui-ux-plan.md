@@ -223,3 +223,21 @@ Acceptance:
 - Unapproved proposals cannot expose an enabled destructive action.
 - After approval, the detail shows the final GitHub result and audit link.
 
+### D. Settings and permission review
+
+Use sections rather than nested cards: workflows, GitHub permissions, provider mode, retention, budget, deletion. Put the permission summary beside the control that changes it.
+
+Acceptance:
+
+- Every external data path has a visible off switch and retention description.
+- Destructive deletion requires confirmation and reports what will be deleted.
+
+## UI verification
+
+- Playwright flow: connect fixture repository, open queue, filter, review, reject, approve a synthetic proposal, verify status and audit event.
+- Axe scan on overview, queue, proposal detail, dialog, and settings.
+- Keyboard-only test with focus screenshots.
+- Narrow screenshot and scroll-width gate at 390px.
+- Test long issue titles, repository names, hashes, and provider errors for wrapping.
+
+---
