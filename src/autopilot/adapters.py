@@ -280,3 +280,84 @@ class GitHubAdapter:
             raise AdapterError(f"unexpected status {status}")
 
 
+class LocalFixtureAdapter:
+    """Offline adapter backed by the local store.
+
+    Used by the default $0 path and by tests. It is deliberately explicit that
+    nothing leaves the machine: comments are recorded with `source="posted"` and
+    an `external_id` prefixed `local-`, so a demo database can never be mistaken
+    for real forge activity.
+    """
+
+    def __init__(
+        self, store: Store, *, label_sink: list[tuple[str, int, tuple[str, ...]]] | None = None
+    ) -> None:
+        self._store = store
+        self._label_sink = label_sink if label_sink is not None else []
+
+    def get_issue(self, repository: Repository, number: int) -> Issue:
+        issue = self._store.get_issue(repository.id, number)
+        if issue is None:
+            raise AdapterNotFound(f"issue #{number} is not in the local fixture store")
+        return issue
+
+    def list_issues(self, repository: Repository, *, limit: int = 50) -> list[Issue]:
+        return self._store.list_issues(repository.id, limit=limit)
+
+    def get_pull_request(self, repository: Repository, number: int) -> PullRequest:
+        pull_request = self._store.get_pull_request(repository.id, number)
+        if pull_request is None:
+            raise AdapterNotFound(f"pull request #{number} is not in the local fixture store")
+        return pull_request
+
+    def list_issue_comments(self, repository: Repository, number: int) -> list[Comment]:
+        return [
+            Comment(
+                id=str(row["id"]),
+                repository_id=str(row["repository_id"]),
+                issue_number=int(row["issue_number"]),
+                body=str(row["body"]),
+                author_login=str(row["author_login"]),
+                source="posted" if row["source"] == "posted" else "fetched",
+                created_at=str(row["created_at"]),
+            )
+            for row in self._store.list_comments(repository.id, number)
+        ]
+
+    def _require_subject(self, repository: Repository, number: int) -> None:
+        """Resolve a number against issues *and* pull requests.
+
+        GitHub numbers issues and pull requests in one sequence, and PR
+        conversation comments use the issue-comment endpoints, so a PR target
+        must resolve here instead of failing as a missing issue.
+        """
+
+        if self._store.get_issue(repository.id, number) is not None:
+            return
+        if self._store.get_pull_request(repository.id, number) is not None:
+            return
+        raise AdapterNotFound(
+            f"#{number} is not an issue or pull request in the local fixture store"
+        )
+
+    def post_comment(self, repository: Repository, number: int, body: str) -> PostedComment:
+        self._require_subject(repository, number)
+        return PostedComment(external_id=f"local-{repository.id}-{number}-{len(body)}", body=body)
+
+    def add_labels(self, repository: Repository, number: int, labels: Sequence[str]) -> None:
+        self._require_subject(repository, number)
+        self._label_sink.append((repository.id, number, tuple(labels)))
+
+    @property
+    def applied_labels(self) -> list[tuple[str, int, tuple[str, ...]]]:
+        return list(self._label_sink)
+
+
+class GitLabAdapter:
+    """Declared boundary for GitLab; not implemented in this release."""
+
+    def __init__(self, **_kwargs: object) -> None:
+        raise UnsupportedProvider(
+            "GitLab support is a documented boundary and is not implemented; "
+            "use the GitHub adapter or the local fixture adapter"
+        )
