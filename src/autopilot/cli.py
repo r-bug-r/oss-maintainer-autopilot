@@ -115,3 +115,69 @@ def cmd_triage(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_review_pr(args: argparse.Namespace) -> int:
+    runtime = build_runtime(_settings(args))
+    repository = _require_repository(runtime.store, args.repository_id)
+    pull_request = runtime.store.get_pull_request(repository.id, args.pull_request)
+    if pull_request is None:
+        pull_request = runtime.adapter.get_pull_request(repository, args.pull_request)
+        runtime.store.save_pull_request(pull_request)
+    result = runtime.engine.review_pull_request(pull_request)
+    _print({"created": result.created, "proposal": proposal_detail(result.proposal)})
+    return EXIT_OK
+
+
+def cmd_proposals(args: argparse.Namespace) -> int:
+    store = _store(args)
+    store.expire_due_proposals()
+    proposals = store.list_proposals(
+        repository_id=args.repository_id,
+        states=[args.state] if args.state else None,
+        limit=args.limit,
+    )
+    _print({"proposals": [proposal_summary(proposal) for proposal in proposals]})
+    return EXIT_OK
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    store = _store(args)
+    store.expire_due_proposals()
+    proposal = store.get_proposal(args.proposal_id)
+    if proposal is None:
+        raise NotFound(f"proposal {args.proposal_id} not found")
+    _print(proposal_detail(proposal))
+    return EXIT_OK
+
+
+def cmd_approve(args: argparse.Namespace) -> int:
+    runtime = build_runtime(_settings(args))
+    proposal = runtime.engine.approve(args.proposal_id, args.actor)
+    _print(proposal_summary(proposal))
+    return EXIT_OK
+
+
+def cmd_reject(args: argparse.Namespace) -> int:
+    runtime = build_runtime(_settings(args))
+    proposal = runtime.engine.reject(args.proposal_id, args.actor, args.reason)
+    _print(proposal_summary(proposal))
+    return EXIT_OK
+
+
+def cmd_apply(args: argparse.Namespace) -> int:
+    runtime = build_runtime(_settings(args))
+    proposal = runtime.engine.execute(args.proposal_id, args.actor)
+    _print(proposal_summary(proposal))
+    return EXIT_OK if proposal.state == "executed" else 1
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    store = _store(args)
+    if args.audit_command == "verify":
+        ok, checked, broken = store.verify_audit_chain()
+        _print({"ok": ok, "checked": checked, "first_broken_id": broken})
+        return EXIT_OK if ok else 1
+    entries = store.list_audit(repository_id=args.repository_id, limit=args.limit)
+    _print({"events": [entry.as_dict() for entry in entries]})
+    return EXIT_OK
+
+
