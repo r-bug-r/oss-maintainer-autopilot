@@ -371,3 +371,5 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
 
+if __name__ == "__main__":
+    raise SystemExit(main())
