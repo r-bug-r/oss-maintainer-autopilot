@@ -226,3 +226,52 @@ ALTER TABLE repository_actors_v2 RENAME TO repository_actors;
 _MIGRATIONS: tuple[tuple[int, str], ...] = ((1, _SCHEMA_V1), (2, _SCHEMA_V2))
 
 
+def utcnow() -> str:
+    """Return an ISO-8601 UTC timestamp with millisecond precision."""
+
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def connect(db_path: Path | str) -> sqlite3.Connection:
+    path = Path(db_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path, timeout=15.0)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA busy_timeout = 15000")
+    return connection
+
+
+def init_db(db_path: Path | str) -> None:
+    with connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        applied = {
+            row["version"]
+            for row in connection.execute("SELECT version FROM schema_migrations").fetchall()
+        }
+        for version, script in _MIGRATIONS:
+            if version in applied:
+                continue
+            connection.executescript(script)
+            connection.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                (version, utcnow()),
+            )
+        connection.commit()
+
+
+@contextmanager
+def transaction(connection: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Run a write transaction, rolling back on any exception."""
+
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
