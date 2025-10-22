@@ -1,0 +1,112 @@
+"""Deterministic duplicate-candidate retrieval.
+
+Similarity is computed locally with no model involvement. The model may later
+explain a candidate, but it never decides whether one exists.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from difflib import SequenceMatcher
+
+STOPWORDS = frozenset(
+    {
+        "a",
+        "about",
+        "after",
+        "all",
+        "also",
+        "an",
+        "and",
+        "any",
+        "are",
+        "as",
+        "at",
+        "be",
+        "been",
+        "before",
+        "being",
+        "but",
+        "by",
+        "can",
+        "could",
+        "did",
+        "do",
+        "does",
+        "for",
+        "from",
+        "had",
+        "has",
+        "have",
+        "how",
+        "i",
+        "if",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "just",
+        "like",
+        "make",
+        "may",
+        "me",
+        "more",
+        "most",
+        "my",
+        "no",
+        "not",
+        "of",
+        "on",
+        "or",
+        "other",
+        "our",
+        "out",
+        "over",
+        "same",
+        "should",
+        "so",
+        "some",
+        "such",
+        "than",
+        "that",
+        "the",
+        "their",
+        "them",
+        "then",
+        "there",
+        "these",
+        "they",
+        "this",
+        "those",
+        "to",
+        "too",
+        "up",
+        "us",
+        "use",
+        "used",
+        "using",
+        "very",
+        "was",
+        "we",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "while",
+        "who",
+        "why",
+        "will",
+        "with",
+        "would",
+        "you",
+        "your",
+    }
+)
+
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+@dataclass(frozen=True, slots=True)
