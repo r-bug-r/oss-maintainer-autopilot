@@ -270,3 +270,33 @@ class Proposal:
 
 
 @dataclass(frozen=True, slots=True)
+class RepositorySettings:
+    repository_id: str
+    workflows: dict[str, bool] = field(
+        default_factory=lambda: {"issue_triage": True, "pr_review": True, "release_notes": False}
+    )
+    label_taxonomy: tuple[str, ...] = (
+        "bug",
+        "documentation",
+        "enhancement",
+        "question",
+        "good first issue",
+        "needs-reproduction",
+        "duplicate",
+    )
+    daily_request_limit: int = 200
+    daily_cost_limit_usd: float = 0.0
+    proposal_ttl_minutes: int = 60
+
+    def workflow_enabled(self, workflow: str) -> bool:
+        return bool(self.workflows.get(workflow, False))
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "repository_id": self.repository_id,
+            "workflows": dict(self.workflows),
+            "label_taxonomy": list(self.label_taxonomy),
+            "daily_request_limit": self.daily_request_limit,
+            "daily_cost_limit_usd": self.daily_cost_limit_usd,
+            "proposal_ttl_minutes": self.proposal_ttl_minutes,
+        }
