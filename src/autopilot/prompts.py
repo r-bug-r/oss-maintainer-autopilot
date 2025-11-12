@@ -75,3 +75,34 @@ INJECTION_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 
 @dataclass(frozen=True, slots=True)
+class PromptBundle:
+    version: str
+    system_prompt: str
+    user_prompt: str
+    schema_hint: str
+
+
+def injection_signals(text: str) -> tuple[str, ...]:
+    """Return the injection patterns matched in untrusted text, for display only."""
+
+    return tuple(pattern.pattern for pattern in INJECTION_PATTERNS if pattern.search(text))
+
+
+def build_prompt(workflow: WorkflowName, context: dict[str, Any]) -> PromptBundle:
+    """Build the versioned prompt for a workflow and its redacted context."""
+
+    task = _TASKS[workflow]
+    schema_hint = _SCHEMAS[workflow]
+    user_prompt = (
+        f"RESPONSE_SCHEMA: {schema_hint}\n"
+        f"{task}\n"
+        "CONTEXT_JSON:\n"
+        f"{canonical_json(context)}\n"
+        "END_CONTEXT_JSON"
+    )
+    return PromptBundle(
+        version=PROMPT_VERSION,
+        system_prompt=_SYSTEM,
+        user_prompt=user_prompt,
+        schema_hint=schema_hint,
+    )
