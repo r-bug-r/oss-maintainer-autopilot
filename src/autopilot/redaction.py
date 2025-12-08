@@ -41,3 +41,66 @@ _SECRET_MARKERS = tuple(marker for marker, _ in _PATTERNS if marker not in {"ema
 
 
 @dataclass(frozen=True, slots=True)
+class Redaction:
+    text: str
+    hits: tuple[str, ...] = ()
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.hits)
+
+    @property
+    def contained_secret(self) -> bool:
+        return any(hit in _SECRET_MARKERS for hit in self.hits)
+
+
+def _apply(name: str, pattern: re.Pattern[str], text: str, hits: list[str]) -> str:
+    """Apply one redaction pattern, recording each category that matched."""
+
+    if name == "assigned_secret":
+
+        def _replace_assignment(match: re.Match[str]) -> str:
+            hits.append(name)
+            return f"{match.group(1)}{match.group(2)}[REDACTED:{name}]"
+
+        return pattern.sub(_replace_assignment, text)
+
+    def _replace(match: re.Match[str]) -> str:
+        hits.append(name)
+        return f"[REDACTED:{name}]"
+
+    return pattern.sub(_replace, text)
+
+
+def redact(text: str) -> Redaction:
+    """Redact secrets and email addresses from text.
+
+    The replacement includes the category, which keeps logs useful while
+    removing the sensitive value. Running redaction twice yields the same text.
+    """
+
+    if not text:
+        return Redaction(text="")
+    hits: list[str] = []
+    result = text
+    for name, pattern in _PATTERNS:
+        result = _apply(name, pattern, result, hits)
+    return Redaction(text=result, hits=tuple(dict.fromkeys(hits)))
+
+
+def redact_value(value: Any) -> Any:
+    """Recursively redact strings inside JSON-like values."""
+
+    if isinstance(value, str):
+        return redact(value).text
+    if isinstance(value, list):
+        return [redact_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(redact_value(item) for item in value)
+    if isinstance(value, dict):
+        return {key: redact_value(item) for key, item in value.items()}
+    return value
+
+
+def contains_secret(text: str) -> bool:
+    return redact(text).contained_secret
