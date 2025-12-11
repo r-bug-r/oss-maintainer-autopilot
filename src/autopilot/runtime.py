@@ -120,3 +120,143 @@ def register_repository(
     return repository
 
 
+def purge_expired(*, store: Store, retention_days: int) -> dict[str, int]:
+    """Delete content past retention while keeping the audit chain intact."""
+
+    cutoff = (
+        (datetime.now(UTC) - timedelta(days=retention_days))
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+    counts = {"proposals": 0, "model_calls": 0, "deliveries": 0}
+    with store.conn:
+        counts["proposals"] = store.conn.execute(
+            "DELETE FROM proposals WHERE state IN ('executed', 'rejected', 'expired') "
+            "AND created_at < ?",
+            (cutoff,),
+        ).rowcount
+        counts["model_calls"] = store.conn.execute(
+            "DELETE FROM model_calls WHERE started_at < ?", (cutoff,)
+        ).rowcount
+        counts["deliveries"] = store.conn.execute(
+            "DELETE FROM webhook_deliveries WHERE received_at < ?", (cutoff,)
+        ).rowcount
+        store.conn.execute("DELETE FROM model_cache WHERE created_at < ?", (cutoff,))
+    store.append_audit(
+        event_type="retention.purged",
+        detail={"cutoff": cutoff, **counts},
+    )
+    return counts
+
+
+def seed_demo(store: Store, *, repository_full_name: str = "demo/autopilot-sandbox") -> Repository:
+    """Create a deterministic local repository with issues and a pull request.
+
+    Demo data is local-only: it exists so the dashboard and the approval flow can
+    be exercised without a token, and it is clearly labeled as such.
+    """
+
+    from .models import Issue, PullRequest, PullRequestFile
+
+    repository = register_repository(
+        store,
+        full_name=repository_full_name,
+        owner_login="demo-maintainer",
+        actor="demo-maintainer",
+    )
+    now = utcnow()
+    issues = [
+        Issue(
+            repository_id=repository.id,
+            number=41,
+            title="Crash on startup with empty config file",
+            body=(
+                "Running `autopilot --config empty.yml` raises a traceback. "
+                "Expected a clear error message instead."
+            ),
+            author_login="reporter-a",
+            state="open",
+            labels=("bug",),
+            created_at=now,
+            updated_at=now,
+        ),
+        Issue(
+            repository_id=repository.id,
+            number=42,
+            title="Crash when config file is empty at startup",
+            body="Same traceback as before when the config file has no keys. Version 0.1.0.",
+            author_login="reporter-b",
+            state="open",
+            labels=(),
+            created_at=now,
+            updated_at=now,
+        ),
+        Issue(
+            repository_id=repository.id,
+            number=43,
+            title="Document the webhook secret rotation procedure",
+            body=(
+                "The docs mention rotation but do not describe the steps or the expected downtime."
+            ),
+            author_login="reporter-c",
+            state="open",
+            labels=("documentation",),
+            created_at=now,
+            updated_at=now,
+        ),
+        Issue(
+            repository_id=repository.id,
+            number=44,
+            title="Would be nice to add a Slack notification option",
+            body="Feature request: send a summary to Slack when a proposal is approved.",
+            author_login="reporter-d",
+            state="open",
+            labels=("enhancement",),
+            created_at=now,
+            updated_at=now,
+        ),
+    ]
+    for issue in issues:
+        store.save_issue(issue)
+    store.save_pull_request(
+        PullRequest(
+            repository_id=repository.id,
+            number=57,
+            title="Validate configuration before loading providers",
+            body="Adds an explicit validation pass so an empty config fails loudly.",
+            author_login="contributor-a",
+            state="open",
+            base_ref="main",
+            head_ref="validate-config",
+            files=(
+                PullRequestFile(
+                    path="src/autopilot/config.py",
+                    additions=42,
+                    deletions=3,
+                    patch_summary="validate() now rejects empty provider blocks",
+                ),
+                PullRequestFile(
+                    path="tests/unit/test_config.py",
+                    additions=61,
+                    deletions=0,
+                    patch_summary="covers the empty-config case",
+                ),
+            ),
+        )
+    )
+    settings = store.get_settings(repository.id)
+    store.save_settings(
+        RepositorySettings(
+            repository_id=repository.id,
+            workflows=dict(settings.workflows),
+            label_taxonomy=settings.label_taxonomy,
+            daily_request_limit=settings.daily_request_limit,
+            daily_cost_limit_usd=settings.daily_cost_limit_usd,
+            proposal_ttl_minutes=settings.proposal_ttl_minutes,
+        )
+    )
+    return repository
+
+
+def default_db_path() -> Path:
+    return Path.cwd() / "var" / "autopilot.db"
