@@ -21,3 +21,73 @@ MAX_ITEM_CHARS = 400
 
 
 @dataclass(frozen=True, slots=True)
+class IssueTriageOutput:
+    summary: str
+    labels: tuple[str, ...]
+    missing_reproduction_questions: tuple[str, ...]
+    duplicate_explanations: tuple[tuple[int, str], ...]
+    proposed_comment: str | None
+    confidence: float
+    risk: Risk
+
+
+@dataclass(frozen=True, slots=True)
+class PullRequestReviewOutput:
+    summary: str
+    review_notes: tuple[str, ...]
+    risk_notes: tuple[str, ...]
+    proposed_comment: str | None
+    confidence: float
+    risk: Risk
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseNotesOutput:
+    summary: str
+    sections: tuple[tuple[str, tuple[str, ...]], ...]
+    proposed_comment: str | None
+    confidence: float
+    risk: Risk
+
+
+WorkflowOutput = IssueTriageOutput | PullRequestReviewOutput | ReleaseNotesOutput
+
+_TRIAGE_FIELDS = {
+    "summary",
+    "labels",
+    "missing_reproduction_questions",
+    "duplicate_explanations",
+    "proposed_comment",
+    "confidence",
+    "risk",
+}
+_PR_FIELDS = {"summary", "review_notes", "risk_notes", "proposed_comment", "confidence", "risk"}
+_RELEASE_FIELDS = {"summary", "sections", "proposed_comment", "confidence", "risk"}
+
+
+def parse_workflow_output(
+    workflow: WorkflowName,
+    raw_text: str,
+    *,
+    label_taxonomy: tuple[str, ...] = (),
+    candidate_numbers: tuple[int, ...] = (),
+) -> WorkflowOutput:
+    """Parse and validate a provider response for a workflow."""
+
+    try:
+        decoded = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ValidationError("model output is not valid JSON") from exc
+    obj = _require_object(decoded, "model output")
+
+    if workflow == "issue_triage":
+        return _parse_triage(
+            obj, label_taxonomy=label_taxonomy, candidate_numbers=candidate_numbers
+        )
+    if workflow == "pr_review":
+        return _parse_pr(obj)
+    if workflow == "release_notes":
+        return _parse_release(obj)
+    raise ValidationError(f"unsupported workflow: {workflow}")
+
+
