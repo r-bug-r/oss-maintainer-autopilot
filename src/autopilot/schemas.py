@@ -91,3 +91,49 @@ def parse_workflow_output(
     raise ValidationError(f"unsupported workflow: {workflow}")
 
 
+def output_as_payload(output: WorkflowOutput) -> dict[str, Any]:
+    """Convert a validated output into a JSON-safe proposal payload."""
+
+    if isinstance(output, IssueTriageOutput):
+        return {
+            "summary": output.summary,
+            "labels": list(output.labels),
+            "missing_reproduction_questions": list(output.missing_reproduction_questions),
+            "duplicate_explanations": [
+                {"candidate_number": number, "explanation": explanation}
+                for number, explanation in output.duplicate_explanations
+            ],
+            "proposed_comment": output.proposed_comment,
+            "confidence": output.confidence,
+            "risk": output.risk,
+        }
+    if isinstance(output, PullRequestReviewOutput):
+        return {
+            "summary": output.summary,
+            "review_notes": list(output.review_notes),
+            "risk_notes": list(output.risk_notes),
+            "proposed_comment": output.proposed_comment,
+            "confidence": output.confidence,
+            "risk": output.risk,
+        }
+    return {
+        "summary": output.summary,
+        "sections": [
+            {"heading": heading, "items": list(items)} for heading, items in output.sections
+        ],
+        "proposed_comment": output.proposed_comment,
+        "confidence": output.confidence,
+        "risk": output.risk,
+    }
+
+
+def citations_for(output: WorkflowOutput, *, subject_number: int) -> tuple[Citation, ...]:
+    """Attach source citations the UI can render next to generated text."""
+
+    citations = [Citation(kind="issue", number=subject_number, label=f"#{subject_number}")]
+    if isinstance(output, IssueTriageOutput):
+        citations.extend(
+            Citation(kind="issue", number=number, label=f"#{number} (duplicate candidate)")
+            for number, _ in output.duplicate_explanations
+        )
+    return tuple(citations)
