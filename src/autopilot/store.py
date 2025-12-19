@@ -1080,3 +1080,5 @@ class Store:
         return True, len(rows), None
 
 
+def new_id(prefix: str, *parts: str) -> str:
+    return f"{prefix}_{hash_text('|'.join(parts))[:24]}"
