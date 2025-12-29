@@ -96,3 +96,87 @@ def parse_issue(payload: JsonObject, repository: Repository) -> Issue:
         raise MalformedPayload(str(exc)) from exc
 
 
+def parse_pull_request(payload: JsonObject, repository: Repository) -> PullRequest:
+    raw = _require_dict(payload, "pull_request")
+    files: list[PullRequestFile] = []
+    for item in raw.get("files") or []:
+        if isinstance(item, dict) and isinstance(item.get("filename"), str):
+            files.append(
+                PullRequestFile(
+                    path=item["filename"],
+                    additions=_optional_int(item, "additions"),
+                    deletions=_optional_int(item, "deletions"),
+                    patch_summary=_optional_str(item, "patch") or "",
+                )
+            )
+    external_id = raw.get("id")
+    try:
+        return PullRequest(
+            repository_id=repository.id,
+            number=_optional_int(raw, "number"),
+            title=_require_str(raw, "title"),
+            body=_optional_str(raw, "body") or "",
+            author_login=_login(raw),
+            state=str(raw.get("state", "open")),
+            base_ref=str(_as_dict(raw.get("base")).get("ref", "")),
+            head_ref=str(_as_dict(raw.get("head")).get("ref", "")),
+            files=tuple(files),
+            external_id=str(external_id) if external_id is not None else None,
+        )
+    except ValidationError as exc:
+        raise MalformedPayload(str(exc)) from exc
+
+
+def parse_delivery(
+    *,
+    secret: str,
+    body: bytes,
+    signature: str | None,
+    delivery_id: str | None,
+    event: str | None,
+    max_body_bytes: int = 1_048_576,
+) -> VerifiedDelivery:
+    """Verify and normalize one webhook delivery.
+
+    Raises a `WebhookError` subclass on every rejection path so callers can map
+    errors to HTTP status codes without inspecting message text.
+    """
+
+    if len(body) > max_body_bytes:
+        raise PayloadTooLarge(f"payload exceeds {max_body_bytes} bytes")
+    verify_signature(secret, body, signature)
+    if not delivery_id or not delivery_id.strip():
+        raise MalformedPayload("missing delivery id")
+    if not event or event.strip() not in SUPPORTED_EVENTS:
+        raise UnsupportedEvent(f"unsupported event: {event}")
+    try:
+        decoded = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MalformedPayload("body is not valid JSON") from exc
+    if not isinstance(decoded, dict):
+        raise MalformedPayload("body must be a JSON object")
+    payload: JsonObject = decoded
+
+    raw_action = payload.get("action", "ping" if event.strip() == "ping" else "")
+    if not isinstance(raw_action, str):
+        raise MalformedPayload("action must be a string")
+    action = raw_action
+    if event.strip() != "ping" and action and action not in SUPPORTED_ACTIONS:
+        raise UnsupportedEvent(f"unsupported action: {action}")
+
+    repository = parse_repository(payload)
+    event_object: Issue | PullRequest | None = None
+    if event.strip() in {"issues", "issue_comment"} and "issue" in payload:
+        event_object = parse_issue(payload, repository)
+    elif event.strip() == "pull_request":
+        event_object = parse_pull_request(payload, repository)
+
+    return VerifiedDelivery(
+        delivery_id=delivery_id.strip(),
+        event=event.strip(),
+        action=action,
+        payload_sha256=sha256_hex(body),
+        repository=repository,
+        payload=payload,
+        event_object=event_object,
+    )
