@@ -49,3 +49,71 @@ from .store import Conflict, Expired, NotFound, Store, Unauthorized, new_id
 SubjectType = Literal["issue", "pull_request", "repository"]
 
 
+class WorkflowError(Exception):
+    """A workflow could not produce a proposal."""
+
+
+class WorkflowDisabled(WorkflowError):
+    pass
+
+
+class _ExistingProposal(Exception):
+    """Internal signal: this exact input already produced a proposal."""
+
+    def __init__(self, proposal: Proposal) -> None:
+        super().__init__(proposal.id)
+        self.proposal = proposal
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationResult:
+    proposal: Proposal
+    created: bool
+
+
+def proposal_summary(proposal: Proposal) -> dict[str, Any]:
+    payload = proposal.payload
+    comment = proposal.action_payload.get("comment")
+    return {
+        "id": proposal.id,
+        "repository_id": proposal.repository_id,
+        "workflow": proposal.workflow,
+        "subject_type": proposal.subject_type,
+        "subject_number": proposal.subject_number,
+        "state": proposal.state,
+        "action_type": proposal.action_type,
+        "confidence": proposal.confidence,
+        "risk": proposal.risk,
+        "summary": payload.get("summary", ""),
+        "comment_preview": (comment[:280] + "…")
+        if isinstance(comment, str) and len(comment) > 280
+        else comment,
+        "labels": proposal.action_payload.get("labels", []),
+        "citations": [citation.as_dict() for citation in proposal.citations],
+        "created_at": proposal.created_at,
+        "expires_at": proposal.expires_at,
+        "approved_by": proposal.approved_by,
+        "executed_at": proposal.executed_at,
+        "attempt_count": proposal.attempt_count,
+        "last_error": proposal.last_error,
+        "cost_usd": proposal.cost_usd,
+        "input_sha256": proposal.input_sha256,
+    }
+
+
+def proposal_detail(proposal: Proposal) -> dict[str, Any]:
+    detail = proposal.as_dict()
+    detail["input_context"] = proposal.input_context
+    detail["payload_canonical"] = canonical_json(proposal.payload)
+    return detail
+
+
+__all__ = [
+    "Expired",
+    "GenerationResult",
+    "WorkflowDisabled",
+    "WorkflowEngine",
+    "WorkflowError",
+    "proposal_detail",
+    "proposal_summary",
+]
