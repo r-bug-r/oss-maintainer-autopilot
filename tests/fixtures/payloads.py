@@ -46,3 +46,23 @@ PULL_REQUEST_PAYLOAD: dict[str, Any] = {
 }
 
 
+def issue_opened_payload(**overrides: Any) -> dict[str, Any]:
+    """Return a full `issues` webhook payload with optional top-level overrides."""
+
+    payload: dict[str, Any] = {
+        "action": "opened",
+        "repository": dict(REPOSITORY_PAYLOAD),
+        "issue": dict(ISSUE_PAYLOAD),
+    }
+    payload.update(overrides)
+    return payload
+
+
+def pull_request_opened_payload(**overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "action": "opened",
+        "repository": dict(REPOSITORY_PAYLOAD),
+        "pull_request": dict(PULL_REQUEST_PAYLOAD),
+    }
+    payload.update(overrides)
+    return payload
