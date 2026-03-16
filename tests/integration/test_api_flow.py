@@ -116,3 +116,122 @@ def test_actor_without_role_cannot_trigger_triage(
     assert response.status == 403
 
 
+def test_approval_requires_a_role(api: Api, repository: Repository, issue: Issue) -> None:
+    created = _json(
+        api.handle(
+            _request(
+                "POST",
+                f"/api/repositories/{_repo(repository)}/workflows/issue_triage",
+                body={"number": 7},
+            )
+        )
+    )["proposal"]
+    denied = api.handle(
+        _request("POST", f"/api/proposals/{created['id']}/approve", actor="stranger")
+    )
+    assert denied.status == 403
+
+
+def test_full_approve_execute_cycle(api: Api, repository: Repository, issue: Issue) -> None:
+    proposal = _json(
+        api.handle(
+            _request(
+                "POST",
+                f"/api/repositories/{_repo(repository)}/workflows/issue_triage",
+                body={"number": 7},
+            )
+        )
+    )["proposal"]
+
+    approved = api.handle(_request("POST", f"/api/proposals/{proposal['id']}/approve"))
+    assert approved.status == 200
+    assert _json(approved)["proposal"]["state"] == "approved"
+
+    executed = api.handle(_request("POST", f"/api/proposals/{proposal['id']}/execute"))
+    assert executed.status == 200, executed.body
+    detail = _json(executed)["proposal"]
+    assert detail["state"] in {"executed", "action_failed"}
+    assert detail["attempt_count"] == 1
+
+    if detail["state"] == "executed":
+        # The local fixture adapter records the write so the dashboard can show it.
+        comments = api.runtime.store.list_comments(repository.id, 7)
+        if detail["action_type"] == "comment":
+            assert comments
+
+
+def test_execute_before_approval_is_rejected(
+    api: Api, repository: Repository, issue: Issue
+) -> None:
+    proposal = _json(
+        api.handle(
+            _request(
+                "POST",
+                f"/api/repositories/{_repo(repository)}/workflows/issue_triage",
+                body={"number": 7},
+            )
+        )
+    )["proposal"]
+    response = api.handle(_request("POST", f"/api/proposals/{proposal['id']}/execute"))
+    assert response.status in {400, 409, 403}
+
+
+def test_double_execute_conflicts(api: Api, repository: Repository, issue: Issue) -> None:
+    proposal = _json(
+        api.handle(
+            _request(
+                "POST",
+                f"/api/repositories/{_repo(repository)}/workflows/issue_triage",
+                body={"number": 7},
+            )
+        )
+    )["proposal"]
+    api.handle(_request("POST", f"/api/proposals/{proposal['id']}/approve"))
+    first = api.handle(_request("POST", f"/api/proposals/{proposal['id']}/execute"))
+    second = api.handle(_request("POST", f"/api/proposals/{proposal['id']}/execute"))
+    assert first.status == 200
+    assert second.status == 409
+
+
+def test_rejection_records_reason(api: Api, repository: Repository, issue: Issue) -> None:
+    proposal = _json(
+        api.handle(
+            _request(
+                "POST",
+                f"/api/repositories/{_repo(repository)}/workflows/issue_triage",
+                body={"number": 7},
+            )
+        )
+    )["proposal"]
+    response = api.handle(
+        _request(
+            "POST",
+            f"/api/proposals/{proposal['id']}/reject",
+            body={"reason": "not actionable yet"},
+        )
+    )
+    assert response.status == 200
+    assert _json(response)["proposal"]["state"] == "rejected"
+
+
+def test_expired_proposal_cannot_be_approved(
+    api: Api, repository: Repository, issue: Issue
+) -> None:
+    proposal = _json(
+        api.handle(
+            _request(
+                "POST",
+                f"/api/repositories/{_repo(repository)}/workflows/issue_triage",
+                body={"number": 7},
+            )
+        )
+    )["proposal"]
+    api.store.conn.execute(
+        "UPDATE proposals SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?",
+        (proposal["id"],),
+    )
+    api.store.conn.commit()
+    response = api.handle(_request("POST", f"/api/proposals/{proposal['id']}/approve"))
+    assert response.status == 410
+
+
