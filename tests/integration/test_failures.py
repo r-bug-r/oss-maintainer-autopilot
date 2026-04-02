@@ -181,3 +181,13 @@ def test_deletion_removes_content_and_keeps_audit_shape(tmp_path: Path) -> None:
         runtime.close()
 
 
+def test_log_lines_are_redacted() -> None:
+    stream = io.StringIO()
+    configure_logging(level=logging.INFO, stream=stream)
+    logger = logging.getLogger("autopilot.test")
+    logger.info("token ghp_abcdefghijklmnopqrstuvwxyz0123 leaked from %s", "alice@example.com")
+    rendered = stream.getvalue()
+    assert "ghp_" not in rendered
+    assert "alice@example.com" not in rendered
+    assert "REDACTED:github_token" in rendered
+    assert "REDACTED:email" in rendered
