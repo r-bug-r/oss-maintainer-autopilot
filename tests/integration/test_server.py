@@ -22,3 +22,28 @@ from autopilot.runtime import Runtime
 
 
 @pytest.fixture
+def server(runtime: Runtime) -> Iterator[ThreadingHTTPServer]:
+    instance = serve(runtime)
+    thread = threading.Thread(target=instance.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield instance
+    finally:
+        instance.shutdown()
+        instance.server_close()
+        thread.join(timeout=5)
+
+
+def _base(server: ThreadingHTTPServer) -> str:
+    host, port = server.server_address[:2]
+    return f"http://{host!s}:{int(port)}"
+
+
+def test_health_over_a_real_socket(server: ThreadingHTTPServer) -> None:
+    with urllib.request.urlopen(f"{_base(server)}/api/health", timeout=5) as response:
+        payload = json.loads(response.read())
+        assert payload == {"status": "ok", "provider": "fake"}
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+
+
