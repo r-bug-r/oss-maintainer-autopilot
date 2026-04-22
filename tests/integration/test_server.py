@@ -47,3 +47,44 @@ def test_health_over_a_real_socket(server: ThreadingHTTPServer) -> None:
         assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
 
 
+def test_triage_and_approval_over_a_real_socket(
+    server: ThreadingHTTPServer,
+    runtime: Runtime,
+    repository: Repository,
+    issue: Issue,
+) -> None:
+    from urllib.parse import quote
+
+    base = _base(server)
+    triage = urllib.request.Request(
+        f"{base}/api/repositories/{quote(repository.id, safe='')}/workflows/issue_triage",
+        data=json.dumps({"number": 7}).encode(),
+        headers={"Content-Type": "application/json", "X-Autopilot-Actor": "maintainer"},
+        method="POST",
+    )
+    with urllib.request.urlopen(triage, timeout=10) as response:
+        assert response.status == 201
+        proposal = json.loads(response.read())["proposal"]
+
+    approve = urllib.request.Request(
+        f"{base}/api/proposals/{quote(proposal['id'], safe='')}/approve",
+        data=b"{}",
+        headers={"Content-Type": "application/json", "X-Autopilot-Actor": "maintainer"},
+        method="POST",
+    )
+    with urllib.request.urlopen(approve, timeout=10) as response:
+        assert response.status == 200
+        assert json.loads(response.read())["proposal"]["state"] == "approved"
+
+    audit = urllib.request.Request(
+        f"{base}/api/audit/verify", headers={"X-Autopilot-Actor": "maintainer"}
+    )
+    with urllib.request.urlopen(audit, timeout=10) as response:
+        assert json.loads(response.read())["ok"] is True
+
+
+def test_dashboard_is_served(server: ThreadingHTTPServer) -> None:
+    with urllib.request.urlopen(f"{_base(server)}/", timeout=5) as response:
+        body = response.read().decode("utf-8")
+        assert "<title>" in body
+        assert response.headers["Content-Type"].startswith("text/html")
