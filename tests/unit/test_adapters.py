@@ -49,3 +49,38 @@ def local_adapter(tmp_path: Path) -> Iterator[LocalAdapterFixture]:
         runtime.close()
 
 
+def test_post_comment_targets_a_pull_request(local_adapter: LocalAdapterFixture) -> None:
+    adapter, repository, runtime = local_adapter
+
+    posted = adapter.post_comment(repository, 9, "Thanks, reviewing now.")
+
+    assert posted.external_id.startswith("local-")
+    runtime.store.save_comment(
+        comment_id=posted.external_id,
+        repository_id=repository.id,
+        issue_number=9,
+        body=posted.body,
+        author_login="autopilot",
+        source="posted",
+        idempotency_key="prop_test",
+    )
+    stored = runtime.store.list_comments(repository.id, 9)
+    assert [row["body"] for row in stored] == ["Thanks, reviewing now."]
+    assert stored[0]["source"] == "posted"
+
+
+def test_add_labels_targets_a_pull_request(local_adapter: LocalAdapterFixture) -> None:
+    adapter, repository, _runtime = local_adapter
+
+    adapter.add_labels(repository, 9, ("needs-tests",))
+
+    assert adapter.applied_labels == [(repository.id, 9, ("needs-tests",))]
+
+
+def test_unknown_target_is_rejected(local_adapter: LocalAdapterFixture) -> None:
+    adapter, repository, _runtime = local_adapter
+
+    with pytest.raises(AdapterNotFound, match="not an issue or pull request"):
+        adapter.post_comment(repository, 404, "hello")
+    with pytest.raises(AdapterNotFound, match="not an issue or pull request"):
+        adapter.add_labels(repository, 404, ("bug",))
