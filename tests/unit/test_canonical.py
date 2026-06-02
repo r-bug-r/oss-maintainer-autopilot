@@ -22,3 +22,17 @@ def test_canonical_hash_is_key_order_independent() -> None:
     assert len(hash_canonical(left)) == 64
 
 
+def test_canonical_json_rejects_non_finite_numbers() -> None:
+    with pytest.raises(ValueError):
+        canonical_json({"value": float("nan")})
+
+
+def test_sha256_hex_accepts_text_and_bytes() -> None:
+    assert sha256_hex("abc") == sha256_hex(b"abc")
+    assert sha256_hex("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+
+def test_constant_time_equals_is_exact() -> None:
+    assert constant_time_equals("sha256=abc", "sha256=abc")
+    assert not constant_time_equals("sha256=abc", "sha256=abd")
+    assert not constant_time_equals("sha256=abc", "sha256=abc ")
