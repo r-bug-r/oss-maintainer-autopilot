@@ -40,3 +40,46 @@ def test_all_advertised_roles_can_be_granted(tmp_path: Path) -> None:
         runtime.close()
 
 
+def test_existing_v1_database_is_upgraded_to_accept_approvers(tmp_path: Path) -> None:
+    db_path = tmp_path / "v1.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(_SCHEMA_V1)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        conn.execute("INSERT INTO schema_migrations VALUES (1, '2026-01-01T00:00:00.000Z')")
+        conn.execute(
+            "INSERT INTO repositories "
+            "(id, provider, full_name, owner_login, created_at, updated_at) "
+            "VALUES ('github:acme/widget', 'github', 'acme/widget', 'owner-login', "
+            "'2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')"
+        )
+        conn.execute(
+            "INSERT INTO actors (login, created_at) VALUES ('owner-login', "
+            "'2026-01-01T00:00:00.000Z')"
+        )
+        conn.execute(
+            "INSERT INTO repository_actors (repository_id, actor_login, role, granted_at) "
+            "VALUES ('github:acme/widget', 'owner-login', 'owner', "
+            "'2026-01-01T00:00:00.000Z')"
+        )
+
+    init_db(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        versions = [row[0] for row in conn.execute("SELECT version FROM schema_migrations")]
+        assert versions == [1, 2]
+        conn.execute(
+            "INSERT INTO actors (login, created_at) VALUES ('approver-login', "
+            "'2026-02-01T00:00:00.000Z')"
+        )
+        conn.execute(
+            "INSERT INTO repository_actors (repository_id, actor_login, role, granted_at) "
+            "VALUES ('github:acme/widget', 'approver-login', 'approver', "
+            "'2026-02-01T00:00:00.000Z')"
+        )
+        preserved = conn.execute(
+            "SELECT role FROM repository_actors WHERE actor_login = 'owner-login'"
+        ).fetchone()
+        assert preserved is not None and preserved[0] == "owner"
