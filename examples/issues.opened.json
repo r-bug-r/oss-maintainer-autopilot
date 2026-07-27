@@ -1,0 +1,21 @@
+{
+  "action": "opened",
+  "repository": {
+    "id": 900001,
+    "name": "autopilot-sandbox",
+    "full_name": "demo/autopilot-sandbox",
+    "owner": { "login": "demo", "id": 900000, "type": "Organization" },
+    "private": false
+  },
+  "issue": {
+    "id": 500001,
+    "number": 41,
+    "title": "Crash on startup with empty config file",
+    "body": "Running `autopilot --config empty.yml` raises a traceback.",
+    "state": "open",
+    "user": { "login": "reporter-a", "id": 4242 },
+    "labels": [{ "name": "bug" }],
+    "created_at": "2026-10-20T12:00:00Z",
+    "updated_at": "2026-10-20T12:00:00Z"
+  }
+}
