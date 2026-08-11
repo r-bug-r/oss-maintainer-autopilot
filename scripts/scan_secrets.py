@@ -60,3 +60,40 @@ ASSIGNMENT = re.compile(
 )
 
 
+def scan(relative: Path) -> list[str]:
+    if relative.as_posix() in ALLOWLIST:
+        return []
+    try:
+        text = (ROOT / relative).read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return []
+    findings: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if "allowlist secret" in line:
+            continue
+        label = next((name for name, pattern in TOKEN_SHAPES if pattern.search(line)), None)
+        if label is not None:
+            findings.append(f"{relative}:{number}: {label}")
+            continue
+        match = ASSIGNMENT.search(line)
+        if match and _looks_like_value(match.group(1)):
+            findings.append(f"{relative}:{number}: assigned secret literal")
+    return findings
+
+
+def main() -> int:
+    files = iter_files()
+    findings: list[str] = []
+    for relative in files:
+        findings.extend(scan(relative))
+    if findings:
+        print("secret scan failed:", file=sys.stderr)
+        for finding in findings:
+            print(f"  {finding}", file=sys.stderr)
+        return 1
+    print(f"secret scan clean ({len(files)} files)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
