@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Autopilot — proposal console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Autopilot</span>
+        <span class="brand-sub">proposal console</span>
+      </div>
+      <div class="header-controls">
+        <label class="field">
+          <span class="field-label">Repository</span>
+          <select id="repo-select" class="control"></select>
+        </label>
+        <label class="field">
+          <span class="field-label">Acting as</span>
+          <select id="actor-select" class="control"></select>
+        </label>
+        <span id="provider-badge" class="badge badge-neutral">provider: —</span>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Sections">
+      <a href="#/overview" class="tab" data-view="overview">Overview</a>
+      <a href="#/proposals" class="tab" data-view="proposals">Proposals</a>
+      <a href="#/audit" class="tab" data-view="audit">Audit</a>
+      <a href="#/settings" class="tab" data-view="settings">Settings</a>
+    </nav>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <main id="main" class="app-main" tabindex="-1"></main>
+
+    <dialog id="confirm-dialog" class="dialog" aria-labelledby="dialog-title">
+      <form method="dialog" class="dialog-body">
+        <h2 id="dialog-title">Confirm side effect</h2>
+        <p id="dialog-summary" class="dialog-summary"></p>
+        <dl id="dialog-facts" class="fact-list"></dl>
+        <div class="dialog-actions">
+          <button value="cancel" class="button button-quiet">Cancel</button>
+          <button id="dialog-confirm" value="confirm" class="button button-accent">
+            Confirm and apply
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
