@@ -65,6 +65,32 @@ _PR_FIELDS = {"summary", "review_notes", "risk_notes", "proposed_comment", "conf
 _RELEASE_FIELDS = {"summary", "sections", "proposed_comment", "confidence", "risk"}
 
 
+def _require_object(value: object, where: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValidationError(f"{where} must be a JSON object")
+    return value
+
+
+def _reject_unknown(obj: dict[str, Any], allowed: set[str], where: str) -> None:
+    unknown = sorted(set(obj) - allowed)
+    if unknown:
+        raise ValidationError(f"{where} contains unsupported field(s): {', '.join(unknown)}")
+    missing = sorted(allowed - set(obj))
+    if missing:
+        raise ValidationError(f"{where} is missing field(s): {', '.join(missing)}")
+
+
+def _text(value: object, where: str, *, max_chars: int, allow_empty: bool = False) -> str:
+    if not isinstance(value, str):
+        raise ValidationError(f"{where} must be a string")
+    stripped = value.strip()
+    if not stripped and not allow_empty:
+        raise ValidationError(f"{where} must not be empty")
+    if len(stripped) > max_chars:
+        raise ValidationError(f"{where} exceeds {max_chars} characters")
+    return stripped
+
+
 def parse_workflow_output(
     workflow: WorkflowName,
     raw_text: str,
