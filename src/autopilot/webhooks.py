@@ -75,6 +75,30 @@ def compute_signature(secret: str, body: bytes) -> str:
     return f"sha256={digest}"
 
 
+def verify_signature(secret: str, body: bytes, header_value: str | None) -> None:
+    """Verify the GitHub HMAC header, failing closed on every anomaly."""
+
+    if not secret:
+        raise MissingSignature("webhook secret is not configured")
+    if not header_value:
+        raise MissingSignature("missing X-Hub-Signature-256 header")
+    if not header_value.startswith("sha256="):
+        raise InvalidSignature("unsupported signature algorithm")
+    if not constant_time_equals(compute_signature(secret, body), header_value.strip()):
+        raise InvalidSignature("signature mismatch")
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedDelivery:
+    delivery_id: str
+    event: str
+    action: str
+    payload_sha256: str
+    repository: Repository
+    payload: JsonObject
+    event_object: Issue | PullRequest | None
+
+
 def parse_issue(payload: JsonObject, repository: Repository) -> Issue:
     raw = _require_dict(payload, "issue")
     external_id = raw.get("id")
