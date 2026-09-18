@@ -19,6 +19,32 @@ from .models import Comment, Issue, PullRequest, PullRequestFile, Repository
 from .store import Store
 
 
+def _obj(value: object) -> dict[str, Any]:
+    """Narrow a decoded JSON value to an object, or an empty object."""
+    return value if isinstance(value, dict) else {}
+
+
+def _opt_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _str(value: object, default: str = "") -> str:
+    return value if isinstance(value, str) else default
+
+
+def _int(value: object) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+class AdapterError(Exception):
+    """Base class for forge adapter failures."""
+
+    def __init__(self, message: str, *, retryable: bool = False, status: int | None = None) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.status = status
+
+
 class AdapterAuthError(AdapterError):
     pass
 
