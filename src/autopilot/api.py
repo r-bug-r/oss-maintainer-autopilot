@@ -528,6 +528,73 @@ class Api:
         return Response(status=200, body=body, content_type=content_type, headers=headers)
 
 
+class _Handler(BaseHTTPRequestHandler):
+    server_version = "autopilot/0.1"
+    protocol_version = "HTTP/1.1"
+
+    api: Api
+
+    def do_GET(self) -> None:
+        self._serve("GET")
+
+    def do_POST(self) -> None:
+        self._serve("POST")
+
+    def do_HEAD(self) -> None:
+        # HEAD reuses the GET path; `_respond` already omits the body when empty,
+        # and Content-Length still describes the resource as the spec requires.
+        self._serve("GET")
+
+    def do_PUT(self) -> None:
+        self._serve("PUT")
+
+    def do_DELETE(self) -> None:
+        self._serve("DELETE")
+
+    def _serve(self, method: str) -> None:
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > self.api.settings.max_body_bytes:
+            self._respond(_error(413, "payload_too_large", "request body exceeds the limit"))
+            return
+        body = self.rfile.read(length) if length else b""
+        parts = urlsplit(self.path)
+        headers = {key.lower(): value for key, value in self.headers.items()}
+        response = self.api.handle(
+            Request(
+                method=method,
+                path=parts.path,
+                query=parse_qs(parts.query),
+                headers=headers,
+                body=body,
+                remote_is_loopback=self.client_address[0] in {"127.0.0.1", "::1"},
+            )
+        )
+        self._respond(response)
+
+    def _respond(self, response: Response) -> None:
+        self.send_response(response.status)
+        self.send_header("Content-Type", response.content_type)
+        self.send_header("Content-Length", str(len(response.body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+        )
+        for key, value in response.headers.items():
+            self.send_header(key, value)
+        self.end_headers()
+        if response.body:
+            self.wfile.write(response.body)
+
+    def log_message(self, format: str, *args: object) -> None:
+        # Route access logs through the redacting logger configured at startup.
+        import logging
+
+        logging.getLogger("autopilot.http").info("%s %s", self.command, urlsplit(self.path).path)
+
+
 def serve(runtime: Runtime) -> ThreadingHTTPServer:
     api = Api(runtime)
     handler = type("BoundHandler", (_Handler,), {"api": api})
