@@ -33,6 +33,50 @@ EXIT_OK = 0
 EXIT_ERROR = 2
 
 
+def _settings(args: argparse.Namespace) -> Settings:
+    settings = Settings.from_env()
+    if getattr(args, "db", None):
+        settings = replace(settings, db_path=Path(args.db).resolve())
+        settings.validate()
+    return settings
+
+
+def _print(value: Any) -> None:
+    print(json.dumps(value, indent=2, sort_keys=True))
+
+
+def _store(args: argparse.Namespace) -> Store:
+    settings = _settings(args)
+    return build_runtime(settings).store
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    if args.host:
+        settings = replace(settings, host=args.host)
+    if args.port:
+        settings = replace(settings, port=args.port)
+    settings.validate()
+    if settings.webhook_secret:
+        settings.require_webhook_secret()
+    runtime = build_runtime(settings)
+    server = serve(runtime)
+    host = str(server.server_address[0])
+    port = server.server_address[1]
+    print(f"autopilot listening on http://{host}:{port} (provider: {settings.provider})")
+    print(f"database: {settings.db_path}")
+    if settings.provider == "fake":
+        print("provider is the deterministic fake; no network calls will be made")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("shutting down")
+    finally:
+        server.server_close()
+        runtime.close()
+    return EXIT_OK
+
+
 def cmd_repo_add(args: argparse.Namespace) -> int:
     store = _store(args)
     repository = register_repository(
