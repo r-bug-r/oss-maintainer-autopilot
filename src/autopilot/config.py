@@ -16,6 +16,25 @@ class ConfigError(ValueError):
     """Raised when the runtime configuration is unsafe or inconsistent."""
 
 
+def _bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _int(value: str | None, default: int) -> int:
+    if value is None or value.strip() == "":
+        return default
+    return int(value)
+
+
+def _float(value: str | None, default: float) -> float:
+    if value is None or value.strip() == "":
+        return default
+    return float(value)
+
+
+@dataclass(frozen=True, slots=True)
 class Settings:
     """Validated settings for one Autopilot process."""
 
