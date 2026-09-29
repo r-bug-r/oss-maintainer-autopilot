@@ -52,6 +52,32 @@ class Expired(StoreError):
     """The proposal expired before the transition."""
 
 
+def _loads(value: str | None, default: Any) -> Any:
+    if not value:
+        return default
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return default
+
+
+def _iso_after(minutes: int) -> str:
+    return (
+        (datetime.now(UTC) + timedelta(minutes=minutes))
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _is_past(timestamp: str) -> bool:
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    return parsed <= datetime.now(UTC)
+
+
+@dataclass(frozen=True, slots=True)
 class AuditEntry:
     seq: int
     id: str
