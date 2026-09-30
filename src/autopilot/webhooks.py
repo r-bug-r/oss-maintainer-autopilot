@@ -99,6 +99,75 @@ class VerifiedDelivery:
     event_object: Issue | PullRequest | None
 
 
+def _as_dict(value: object) -> JsonObject:
+    return value if isinstance(value, dict) else {}
+
+
+def _require_str(payload: JsonObject, key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise MalformedPayload(f"missing string field: {key}")
+    return value
+
+
+def _require_dict(payload: JsonObject, key: str) -> JsonObject:
+    value = payload.get(key)
+    if not isinstance(value, dict):
+        raise MalformedPayload(f"missing object field: {key}")
+    return value
+
+
+def _optional_str(payload: JsonObject, key: str) -> str | None:
+    value = payload.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _optional_int(payload: JsonObject, key: str, default: int = 0) -> int:
+    value = payload.get(key)
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return default
+
+
+def _login(payload: JsonObject) -> str | None:
+    login = _as_dict(payload.get("user")).get("login")
+    return login if isinstance(login, str) and login else None
+
+
+def _labels(raw: object) -> tuple[str, ...]:
+    if not isinstance(raw, list):
+        return ()
+    names: list[str] = []
+    for item in raw:
+        if isinstance(item, dict):
+            name = item.get("name")
+            if isinstance(name, str) and name:
+                names.append(name)
+        elif isinstance(item, str) and item:
+            names.append(item)
+    return tuple(dict.fromkeys(names))
+
+
+def parse_repository(payload: JsonObject) -> Repository:
+    repo = _require_dict(payload, "repository")
+    owner_login = _require_str(_require_dict(repo, "owner"), "login")
+    external_id = repo.get("id")
+    provider: Literal["github"] = "github"
+    try:
+        return Repository.build(
+            provider=provider,
+            full_name=_require_str(repo, "full_name"),
+            owner_login=owner_login,
+            external_id=str(external_id) if external_id is not None else None,
+        )
+    except ValidationError as exc:
+        raise MalformedPayload(str(exc)) from exc
+
+
 def parse_issue(payload: JsonObject, repository: Repository) -> Issue:
     raw = _require_dict(payload, "issue")
     external_id = raw.get("id")
