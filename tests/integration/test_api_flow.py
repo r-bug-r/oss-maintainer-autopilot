@@ -21,6 +21,50 @@ from ..conftest import WEBHOOK_SECRET
 ACTOR = "maintainer"
 
 
+def _request(
+    method: str,
+    path: str,
+    *,
+    body: object | None = None,
+    actor: str | None = ACTOR,
+    loopback: bool = True,
+    headers: dict[str, str] | None = None,
+    query: str = "",
+) -> Request:
+    raw = b"" if body is None else json.dumps(body).encode("utf-8")
+    merged = dict(headers or {})
+    if actor is not None:
+        merged["x-autopilot-actor"] = actor
+    path, _, inline_query = path.partition("?")
+    combined = inline_query or query
+    return Request(
+        method=method,
+        path=path,
+        query={key: [value] for key, value in _parse_query(combined).items()},
+        headers={key.lower(): value for key, value in merged.items()},
+        body=raw,
+        remote_is_loopback=loopback,
+    )
+
+
+def _repo(repository: Repository) -> str:
+    return quote(repository.id, safe="")
+
+
+def _parse_query(raw: str) -> dict[str, str]:
+    if not raw:
+        return {}
+    parsed: dict[str, str] = {}
+    for chunk in raw.split("&"):
+        key, _, value = chunk.partition("=")
+        parsed[unquote(key)] = unquote(value)
+    return parsed
+
+
+def _json(response: Response) -> dict[str, Any]:
+    return json.loads(response.body.decode("utf-8"))
+
+
 def test_health_is_public(api: Api) -> None:
     response = api.handle(_request("GET", "/api/health", actor=None))
     assert response.status == 200
