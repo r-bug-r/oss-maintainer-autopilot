@@ -21,6 +21,25 @@ from autopilot.runtime import Runtime, build_runtime, register_repository
 from autopilot.workflows import WorkflowEngine, WorkflowError
 
 
+def _runtime(tmp_path: Path, provider: ModelProvider) -> Runtime:
+    """Build a runtime whose engine uses the injected provider.
+
+    `build_runtime` constructs the provider from settings; tests swap it in and
+    rebuild the engine so the gateway and engine share the same instance.
+    """
+
+    runtime = build_runtime(Settings(db_path=tmp_path / "fail.db", provider="fake"))
+    runtime.gateway.provider = provider
+    runtime.engine = WorkflowEngine(
+        store=runtime.store,
+        gateway=runtime.gateway,
+        adapter=runtime.adapter,
+        proposal_ttl_minutes=runtime.settings.proposal_ttl_minutes,
+    )
+    return runtime
+
+
+@pytest.fixture
 def failing_runtime(tmp_path: Path) -> Iterator[Runtime]:
     runtime = _runtime(tmp_path, FakeProvider(scripted={"issue_triage": ProviderTimeout()}))
     try:
@@ -43,6 +62,33 @@ class _BrokenAdapter:
 
     def add_labels(self, repository: Repository, number: int, labels: Sequence[str]) -> None:
         raise AdapterTransient("forge is unavailable")
+
+
+def _issue(repository: Repository, number: int = 7, title: str = "Crash") -> Issue:
+    return Issue(
+        repository_id=repository.id,
+        number=number,
+        title=title,
+        body="Traceback.",
+        author_login="reporter",
+        state="open",
+        labels=(),
+    )
+
+
+def test_provider_timeout_leaves_no_proposal(failing_runtime: Runtime) -> None:
+    repository = register_repository(
+        failing_runtime.store, full_name="acme/widget", owner_login="maintainer"
+    )
+    issue = _issue(repository)
+    failing_runtime.store.save_issue(issue)
+    with pytest.raises(WorkflowError, match="provider failed: timeout"):
+        failing_runtime.engine.triage_issue(issue)
+    assert failing_runtime.store.list_proposals(repository_id=repository.id) == []
+    calls = failing_runtime.store.conn.execute(
+        "SELECT success, error_class FROM model_calls"
+    ).fetchall()
+    assert [(row["success"], row["error_class"]) for row in calls] == [(0, "timeout")]
 
 
 def test_failed_generation_does_not_consume_the_cache(tmp_path: Path) -> None:
