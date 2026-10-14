@@ -18,6 +18,30 @@ from autopilot.schemas import (
 TAXONOMY = ("bug", "enhancement", "documentation", "duplicate")
 
 
+def _triage(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "summary": "Startup crashes when config is empty.",
+        "labels": ["bug"],
+        "missing_reproduction_questions": ["Which Python version?"],
+        "duplicate_explanations": [{"candidate_number": 8, "explanation": "Same traceback."}],
+        "proposed_comment": "Thanks for the report. Which Python version are you on?",
+        "confidence": 0.8,
+        "risk": "low",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _parse(payload: dict[str, object], **kwargs: object) -> WorkflowOutput:
+    return parse_workflow_output(
+        "issue_triage",
+        json.dumps(payload),
+        label_taxonomy=TAXONOMY,
+        candidate_numbers=(8,),
+        **kwargs,
+    )
+
+
 def test_valid_triage_output_is_accepted() -> None:
     output = _parse(_triage())
     assert isinstance(output, IssueTriageOutput)
