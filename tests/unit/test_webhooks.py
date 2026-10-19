@@ -24,6 +24,27 @@ from tests.fixtures.payloads import issue_opened_payload
 SECRET = "unit-test-secret-0123456789"
 
 
+def _payload(**overrides: Any) -> dict[str, Any]:
+    return issue_opened_payload(**overrides)
+
+
+def _body(payload: Any) -> bytes:
+    return json.dumps(payload).encode("utf-8")
+
+
+def test_signature_round_trip() -> None:
+    body = _body(_payload())
+    signature = compute_signature(SECRET, body)
+    verify_signature(SECRET, body, signature)
+
+
+def test_signature_rejects_tampered_body() -> None:
+    body = _body(_payload())
+    signature = compute_signature(SECRET, body)
+    with pytest.raises(InvalidSignature):
+        verify_signature(SECRET, body + b" ", signature)
+
+
 def test_signature_rejects_missing_or_wrong_scheme() -> None:
     body = _body(_payload())
     with pytest.raises(MissingSignature):
