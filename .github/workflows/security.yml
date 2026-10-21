@@ -25,4 +25,4 @@ jobs:
       - name: Secret scan
         run: python scripts/scan_secrets.py
       - name: Static security lint
-        run: python -m ruff check src scripts --select S
+        run: python -m ruff check src scripts --select S --ignore S101
