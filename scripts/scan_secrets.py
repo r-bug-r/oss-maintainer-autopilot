@@ -60,6 +60,28 @@ ASSIGNMENT = re.compile(
 )
 
 
+def _looks_like_value(value: str) -> bool:
+    """A quoted literal is suspicious when it mixes letters and digits."""
+
+    has_letter = any(character.isalpha() for character in value)
+    has_digit = any(character.isdigit() for character in value)
+    return has_letter and has_digit and not value.startswith(("http://", "https://"))
+
+
+def iter_files() -> list[Path]:
+    files: list[Path] = []
+    for path in ROOT.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(ROOT)
+        if any(part in SKIP_DIRS for part in relative.parts):
+            continue
+        if path.suffix.lower() in SKIP_SUFFIXES:
+            continue
+        files.append(relative)
+    return sorted(files)
+
+
 def scan(relative: Path) -> list[str]:
     if relative.as_posix() in ALLOWLIST:
         return []
